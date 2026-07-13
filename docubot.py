@@ -9,6 +9,11 @@ Core DocuBot class responsible for:
 
 import os
 import glob
+import re
+from collections import Counter
+from nltk.stem import PorterStemmer
+
+_stemmer = PorterStemmer()
 
 class DocuBot:
     def __init__(self, docs_folder="docs", llm_client=None):
@@ -48,9 +53,19 @@ class DocuBot:
     # Index Construction (Phase 1)
     # -----------------------------------------------------------
 
+    @staticmethod
+    def tokenize(text):
+        """
+        Lowercase and split text into alphanumeric tokens, stripping punctuation,
+        then stem each token (e.g. "endpoints" -> "endpoint") so matching is
+        robust to plurals and common suffixes. Shared by build_index and
+        score_document so matching is consistent.
+        """
+        words = re.findall(r"[a-z0-9]+", text.lower())
+        return [_stemmer.stem(word) for word in words]
+
     def build_index(self, documents):
         """
-        TODO (Phase 1):
         Build a tiny inverted index mapping lowercase words to the documents
         they appear in.
 
@@ -59,12 +74,11 @@ class DocuBot:
             "token": ["AUTH.md", "API_REFERENCE.md"],
             "database": ["DATABASE.md"]
         }
-
-        Keep this simple: split on whitespace, lowercase tokens,
-        ignore punctuation if needed.
         """
         index = {}
-        # TODO: implement simple indexing
+        for filename, text in documents:
+            for token in set(self.tokenize(text)):
+                index.setdefault(token, []).append(filename)
         return index
 
     # -----------------------------------------------------------
@@ -73,27 +87,29 @@ class DocuBot:
 
     def score_document(self, query, text):
         """
-        TODO (Phase 1):
         Return a simple relevance score for how well the text matches the query.
 
-        Suggested baseline:
-        - Convert query into lowercase words
-        - Count how many appear in the text
-        - Return the count as the score
+        Tokenizes both query and text, then sums the term frequency of each
+        query token found in text (repeats in the query and repeats in the
+        text both increase the score).
         """
-        # TODO: implement scoring
-        return 0
+        query_tokens = self.tokenize(query)
+        text_token_counts = Counter(self.tokenize(text))
+        return sum(text_token_counts[token] for token in query_tokens)
 
     def retrieve(self, query, top_k=3):
         """
-        TODO (Phase 1):
-        Use the index and scoring function to select top_k relevant document snippets.
-
-        Return a list of (filename, text) sorted by score descending.
+        Score every document against the query and return the top_k
+        highest-scoring (filename, text) pairs, sorted by score descending.
+        Documents with a score of 0 (no query terms matched) are excluded.
         """
-        results = []
-        # TODO: implement retrieval logic
-        return results[:top_k]
+        scored = [
+            (self.score_document(query, text), filename, text)
+            for filename, text in self.documents
+        ]
+        scored = [s for s in scored if s[0] > 0]
+        scored.sort(key=lambda s: s[0], reverse=True)
+        return [(filename, text) for _, filename, text in scored[:top_k]]
 
     # -----------------------------------------------------------
     # Answering Modes
