@@ -6,38 +6,58 @@ Core rule for the whole session: **show, ask, pause, hint, only then explain.** 
 
 ---
 
-## THE 5-MINUTE VERSION (use this — the rest of the doc is backup material)
+## THE 5–7 MINUTE VERSION (use this — the rest of the doc is backup material)
 
-Everything below this section is the full 38-minute walkthrough, kept for prep/reference and for follow-up questions if students go deep. **If you only have 5 minutes, run this script instead.** It covers three hurdles — scoring evolution, the stemming word problem, and the refusal design tradeoff — and spends most of its time on the last one, which ends on a genuinely open, unresolved question.
+Everything below this section is the full 38-minute walkthrough, kept for prep/reference and for follow-up questions if students go deep. **This is the actual script to run.** It has two halves: an interactive comparison of all three modes on one shared question (~4 min), then a rapid-fire recap of the real hurdles hit while building this (~2 min). Hard rule: **no single talking block longer than 30 seconds, never more than 60.** If you're about to explain for a full minute, stop and ask a question instead.
 
-**Setup:** same as Section 0 below — terminal ready, `docs/` folder visible, `docubot.py` open but not scrolled to implementation.
+**Setup:** terminal ready with `python main.py`, `docs/` folder visible, `docubot.py` open but not scrolled to implementation.
 
-**0:00–1:00 — Show the finished product.**
-Run mode 3 live on `Where is the auth token generated?` — show the correct, cited answer. Then immediately run it again on `Where is the apple generated?` — show the correct refusal. Say nothing yet except: *"Notice it answered one and refused the other. That's not an accident — that's the whole lesson today."*
+---
 
-**1:00–1:45 — Hurdle: scoring one document vs. ranking all of them.**
-*"Retrieval mode didn't start out returning a paragraph like this — early on it just returned the entire best-matching file."* **Ask:** *"If you can score how well ONE document matches a question, what's actually different about picking the best paragraph out of the best document?"* Pause 5 seconds. Hint if silent: *"Think about it in two steps — first, which file is even the right file? Then, which part of that file actually answers it?"* Reveal in one sentence: we score every whole document first, pick the single best one, *then* split just that one into paragraphs and score those separately. Don't derail into the chunking regex — move on.
+### Half 1 — Interactive mode comparison (~4:00)
 
-**1:45–2:30 — Hurdle: "endpoint" vs. "endpoints".**
-Show that `API_REFERENCE.md` says "endpoints" (plural) while a question might ask about "endpoint" (singular). **Ask:** *"If your scorer just checks for the exact same word, what happens when the doc says 'endpoints' and the question says 'endpoint'?"* Pause. Hint if silent: *"Does the computer know these are basically the same word, or does it see two totally different words?"* Reveal: we run every word through a stemmer that reduces both down to the same root, `endpoint`, before comparing — otherwise this exact mismatch silently breaks retrieval.
+**0:00–0:25 — Preface (one breath, no pause here).**
+Say, close to verbatim: *"DocuBot is a small documentation assistant that answers developer questions about a codebase. It has three modes: naive LLM, which sends the whole docs corpus to Gemini and asks it to answer; retrieval only, which uses indexing and scoring to pull relevant snippets with no LLM involved; and RAG, which retrieves snippets first, then asks Gemini to answer using only those. The docs folder has realistic developer files — API reference, auth notes, database notes — just plain text, no backend needed."*
 
-**2:30–4:30 — The main event: the refusal tradeoff.**
-Run this live:
-```
-Where is the apple generated?
-```
-Show the refusal. **Ask:** *"'Apple' isn't in these docs anywhere — so why might a naive scorer have almost answered this anyway?"* Pause 5 seconds. Hint if silent: *"What other words were in that sentence — 'where,' 'is,' 'the'? Common words show up everywhere, regardless of topic."* Reveal in one sentence: we filter common words and require most of the *meaningful* words in the question to actually show up before answering.
+**0:25–2:15 — Run all three modes live, same question, back to back.**
+Type `Where is the auth token generated?` into mode 1, then mode 2, then mode 3, letting each finish before starting the next. Narrate in a half-sentence between runs, nothing more — *"okay, that's naive... now retrieval only... now RAG"* — the outputs do the talking, not you.
 
-Then immediately run:
-```
-How does a client refresh an access token?
-```
-Show that this **also refuses** — even though the docs plainly answer it (`/api/refresh`, documented step-by-step in AUTH.md). **Ask:** *"This one's actually answerable — the docs cover it. So why do you think it refused anyway?"* Pause 5–10 seconds — let it sit, this is the hard one. Hint if silent: *"The answer is split across two back-to-back paragraphs, not one. Does that change your guess?"*
+**2:15–2:45 — Ask: "What information do you think each mode used to come up with its answer?"**
+Pause 3–5 seconds. Hints if silent, one at a time:
+- *"Does the naive answer look like it read any of our files, or is it guessing from general knowledge?"*
+- *"What do modes 2 and 3 have in common that mode 1 doesn't?"*
 
-**Reveal, and end on the open question, don't close it:** the same fix that correctly blocked the "apple" answer is *why* this one gets blocked too — the real answer just happens to be split across two paragraphs, and neither one alone has enough of the key words. **Ask the class to sit with:** *"How would you fix this refresh-token case without breaking the apple case? There's no clean answer — that's genuinely still unresolved in this build."*
+Let a student land on: naive mode never sees the docs at all; retrieval and RAG both pull from `AUTH.md` specifically.
 
-**4:30–5:00 — Close.**
-*"Three things to notice: matching text is never as simple as 'exact word equals exact word,' retrieval had to evolve from whole-document to per-paragraph, and being careful about false answers can accidentally create false refusals. That last one is the real tradeoff in every RAG system you'll ever build."* Stop there — don't re-open discussion if time's up.
+**2:45–3:45 — Ask: "Retrieval mode returns just this one paragraph — any guesses how you'd narrow a whole document down to just the right paragraph?"**
+Pause 3–5 seconds. Hint if silent: *"What's in a markdown file you could split on — headings? Blank lines between paragraphs?"* You don't need the full reveal here — just let them propose an idea (split by headers, split by blank lines, score each piece). You'll confirm the actual answer in Half 2.
+
+---
+
+### Half 2 — Rapid hurdle recap (~2:00, four beats, ~30s each)
+
+**Beat 1 — The model kept rejecting us.**
+*"Quick one — getting the LLM call working took a few tries. Hit a 404 on one model name, then a 403 on the next that turned out to be an account-access issue, not a model issue. Landed on `gemma-4-31b-it`. Point being: the model name here isn't a fixed fact, it's something you have to verify, because it can change under you."*
+
+**Beat 2 — Confirm the paragraph-narrowing design decision.**
+*"Following up on your guesses — yes, that's basically it. We score every whole document first, pick the single best one, then split just that one file into paragraphs on blank lines and score those separately. Originally retrieval mode just returned the entire best-matching file — going from 'best document' to 'best paragraph inside the best document' was the hardest part of this whole build."*
+
+**Beat 3 — The word problem.**
+*"One more: `API_REFERENCE.md` says 'endpoints,' plural — but someone might ask about 'endpoint,' singular. A plain word-match sees those as two different words. We fixed it by running every word through a stemming library, NLTK's Porter stemmer, so 'endpoint' and 'endpoints' both reduce to the same root before comparing."*
+
+**Beat 4 — One hurdle left for them.**
+*"There's one more design tradeoff in here — about when the system should say 'I don't know' — that I'll let you find on your own. I'll send around the write-up with all of this if you want to dig in."* Send `model_card.md` (and this file, if useful) after class. Do not explain the refusal tradeoff live in this version — it's the one genuinely open, unresolved question, and it's better discovered than told.
+
+---
+
+### Cheat Sheet (for live use)
+
+| Timestamp | Question | Fallback hint |
+|---|---|---|
+| 2:15 | What information do you think each mode used? | Does naive mode look like it read our files? What do modes 2 & 3 share that mode 1 doesn't? |
+| 2:45 | How would you narrow a whole document to just the right paragraph? | What's in a markdown file you could split on — headings, blank lines? |
+
+Beats 1–4 in Half 2 are statements, not questions — say them, don't pause for answers, keep moving.
 
 ---
 
